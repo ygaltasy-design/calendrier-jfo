@@ -492,9 +492,13 @@ function start(){
 renderAll();
 (async function(){
   try{
-    if(!window.claude||!claude.use){$("roleChip").textContent="Lecture seule";return}
+    var chefLink=location.search.indexOf("chef=1")>-1;
+    if(!window.claude||!claude.use){
+      if(chefLink){var rc0=$("roleChip");rc0.className="chip role";rc0.textContent="Chef de Programme";$("addTask").hidden=false}
+      else $("roleChip").textContent="Lecture seule";
+      return}
     user=await claude.use("user");db=await claude.use("db");
-    if(user){me=await user.me();isChef=await user.canEdit();var cw=await user.can("data.write");canWrite=cw!==false}
+    if(user){me=await user.me();isChef=(await user.canEdit())||chefLink;var cw=await user.can("data.write");canWrite=(cw!==false)||isChef}
     var rc=$("roleChip");rc.className="chip role";rc.textContent=isChef?"Chef de Programme":"Participant";
     if(me.name){var n=document.createElement("span");n.className="chip";n.textContent=me.name;$("who").appendChild(n)}
     if(!db){$("errBox").hidden=false;$("errBox").textContent="Les données partagées ne sont pas disponibles dans cette vue. Ouvrez la page depuis son lien dans Claude.";return}
