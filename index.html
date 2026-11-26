@@ -1,0 +1,509 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Calendrier JFO</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Plan : deux voix (Chef de Programme, JFO) autour d'un seul calendrier. Colonne de tâches fixe à gauche, 14 semaines à droite, panneau de détail dessous. */
+:root{
+  --bg:#f1f4f3; --surface:#ffffff; --ink:#13201b; --muted:#566860; --line:#d8e0dc; --soft:#e8eeeb;
+  --accent:#0b5d73; --accent-ink:#ffffff; --accent-soft:#d9ecf1;
+  --todo:#c5d0cb; --doing:#0b5d73; --done:#2e8540; --blocked:#c0392b; --late:#c9740a;
+  --now:#fff4d6; --danger-soft:#fbe4e0; --ok-soft:#dff0e3;
+  --font-body:'Inter',system-ui,-apple-system,Segoe UI,sans-serif; --font-head:'Space Grotesk','Inter',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1714; --surface:#17211d; --ink:#e7efeb; --muted:#9db0a8; --line:#2a3a34; --soft:#1f2c27;
+  --accent:#5ec0d8; --accent-ink:#06222b; --accent-soft:#163743;
+  --todo:#3a4a44; --doing:#5ec0d8; --done:#5bb872; --blocked:#e5766a; --late:#e8a04a;
+  --now:#3a3216; --danger-soft:#3a1d19; --ok-soft:#183324; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1714; --surface:#17211d; --ink:#e7efeb; --muted:#9db0a8; --line:#2a3a34; --soft:#1f2c27;
+  --accent:#5ec0d8; --accent-ink:#06222b; --accent-soft:#163743;
+  --todo:#3a4a44; --doing:#5ec0d8; --done:#5bb872; --blocked:#e5766a; --late:#e8a04a;
+  --now:#3a3216; --danger-soft:#3a1d19; --ok-soft:#183324; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:14px;line-height:1.5;
+  padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1,h2,h3{font-family:var(--font-head);margin:0;text-wrap:balance}
+h1{font-size:26px;line-height:1.15}
+h2{font-size:17px}
+h3{font-size:14px}
+.top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between}
+.top p{margin:4px 0 0;color:var(--muted)}
+.who{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:var(--soft);font-size:12px;font-weight:500}
+.chip.role{background:var(--accent);color:var(--accent-ink)}
+.rule{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);padding:10px 14px;border-radius:4px}
+.rule b{font-family:var(--font-head)}
+.stats{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center}
+.meter{flex:1 1 220px;min-width:160px;height:8px;background:var(--soft);border-radius:4px;overflow:hidden;display:flex}
+.meter i{display:block;height:100%}
+.legend{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:12px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.dot{width:10px;height:10px;border-radius:2px;display:inline-block}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:9px 14px;font:500 14px var(--font-body);color:var(--muted);cursor:pointer}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs .badge{background:var(--late);color:#fff;border-radius:999px;font-size:11px;padding:0 7px;margin-left:6px}
+button,input,select,textarea{font:inherit;color:inherit}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:500}
+.btn:hover{border-color:var(--accent)}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.danger{color:var(--blocked);border-color:var(--blocked)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px}
+.gwrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:6px}
+.gantt{min-width:900px;--labw:270px}
+.g-row{display:grid;grid-template-columns:var(--labw) repeat(var(--nw),minmax(40px,1fr));border-bottom:1px solid var(--soft);align-items:stretch;position:relative}
+.g-head{font-size:11px;color:var(--muted);text-align:center;padding:6px 0;border-bottom:1px solid var(--line);background:var(--surface);position:sticky;top:0}
+.g-head small{display:block;font-size:10px}
+.g-head.now{background:var(--now);color:var(--ink);font-weight:600}
+.g-head.lab{text-align:left;padding-left:12px;position:sticky;left:0;z-index:3}
+.g-phase{grid-column:1/-1;background:var(--soft);font:600 12px var(--font-head);padding:5px 12px;letter-spacing:.02em}
+.g-lab{grid-column:1;grid-row:1;position:sticky;left:0;z-index:2;background:var(--surface);text-align:left;border:0;border-right:1px solid var(--line);padding:7px 12px;cursor:pointer;min-width:0}
+.g-lab:hover,.g-row.sel .g-lab{background:var(--accent-soft)}
+.g-lab .t{display:block;font-weight:500;font-size:13px;line-height:1.3}
+.g-lab .s{display:block;font-size:11px;color:var(--muted)}
+.g-cell{grid-row:1;border-left:1px solid var(--soft)}
+.g-cell.now{background:var(--now)}
+.g-bar{grid-row:1;align-self:center;height:22px;margin:0 2px;border-radius:4px;z-index:1;font-size:11px;color:#fff;padding:0 6px;line-height:22px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:pointer;border:0;text-align:left}
+.g-bar.todo{background:var(--todo);color:var(--ink)}
+.g-bar.doing{background:var(--doing);color:var(--accent-ink)}
+.g-bar.done{background:var(--done)}
+.g-bar.blocked{background:var(--blocked)}
+.g-bar.late{box-shadow:0 0 0 2px var(--late)}
+.g-bar.dem{background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.28) 0 4px,transparent 4px 8px)}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;background:var(--soft)}
+.pill.doing{background:var(--accent-soft);color:var(--accent)}
+.pill.done{background:var(--ok-soft);color:var(--done)}
+.pill.blocked{background:var(--danger-soft);color:var(--blocked)}
+.pill.late{background:var(--late);color:#fff}
+.pill.dem{background:var(--now);color:var(--ink)}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:5px 11px;cursor:pointer;font-weight:500}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:12px;color:var(--muted);font-weight:500}
+.field input,.field select,.field textarea{border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:7px 9px;width:100%;min-width:0}
+textarea{min-height:70px;resize:vertical}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:8px 0}
+.kv dt{color:var(--muted);font-size:12px}
+.kv dd{margin:0}
+.card{border:1px solid var(--line);border-radius:6px;padding:12px;background:var(--surface);display:flex;flex-direction:column;gap:8px;min-width:0}
+.card.late{border-color:var(--late)}
+.list{display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+.note{background:var(--now);padding:8px 12px;border-radius:4px;font-size:13px}
+.err{background:var(--danger-soft);color:var(--blocked);padding:8px 12px;border-radius:4px}
+dialog{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:20px;width:min(560px,calc(100vw - 32px));max-height:90vh;overflow:auto}
+dialog::backdrop{background:rgba(10,20,16,.55)}
+.log{display:flex;flex-direction:column}
+.log div{padding:7px 0;border-bottom:1px solid var(--soft);display:flex;gap:12px}
+.log time{color:var(--muted);font-size:12px;min-width:112px}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion:no-preference){.g-lab,.g-bar{transition:background .15s}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Calendrier de travail JFO</h1>
+      <p>Pax Justine Ahon, Financière Junior, avec le Chef de Programme. Période probatoire du 20 octobre 2026 au 19 janvier 2027.</p>
+    </div>
+    <div class="who" id="who"><span class="chip" id="roleChip">Connexion…</span></div>
+  </header>
+
+  <div class="rule"><b>Règle de travail.</b> Ce qui n'est pas au calendrier n'est pas à faire. Toute autre demande, d'où qu'elle vienne, passe par l'onglet Demandes et reçoit une décision du Chef de Programme : acceptée avec une date, reportée ou refusée.</div>
+
+  <div class="stats">
+    <div class="meter" id="meter" role="img" aria-label="Avancement"></div>
+    <div id="statTxt" class="small"></div>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--todo)"></i>À faire</span>
+      <span><i class="dot" style="background:var(--doing)"></i>En cours</span>
+      <span><i class="dot" style="background:var(--done)"></i>Fait</span>
+      <span><i class="dot" style="background:var(--blocked)"></i>Bloqué</span>
+      <span><i class="dot" style="box-shadow:0 0 0 2px var(--late);background:var(--surface)"></i>En retard</span>
+      <span><i class="dot" style="background:repeating-linear-gradient(135deg,var(--todo) 0 3px,var(--surface) 3px 6px)"></i>Issue d'une demande</span>
+    </div>
+  </div>
+
+  <div id="loadNote" class="note" hidden>Connexion aux données partagées plus lente que d'habitude. Ce que vous voyez peut ne pas être à jour.</div>
+  <div id="errBox" class="err" hidden></div>
+
+  <nav class="tabs" role="tablist" aria-label="Vues">
+    <button role="tab" id="tab-cal" aria-selected="true" data-tab="cal">Calendrier</button>
+    <button role="tab" id="tab-week" aria-selected="false" data-tab="week">Cette semaine</button>
+    <button role="tab" id="tab-req" aria-selected="false" data-tab="req">Demandes<span class="badge" id="reqBadge" hidden>0</span></button>
+    <button role="tab" id="tab-log" aria-selected="false" data-tab="log">Journal</button>
+  </nav>
+
+  <section id="v-cal">
+    <div class="row" style="margin-bottom:10px">
+      <h2>14 semaines, du 19 octobre au 24 janvier</h2>
+      <button class="btn pri" id="addTask" hidden>Ajouter une tâche</button>
+    </div>
+    <div class="gwrap"><div id="gantt"></div></div>
+    <div class="panel" id="detail" style="margin-top:14px"><div class="muted">Choisissez une tâche pour voir son détail, changer son état ou ajouter une note.</div></div>
+  </section>
+
+  <section id="v-week" hidden>
+    <div class="row" style="margin-bottom:10px">
+      <h2 id="weekTitle">Cette semaine</h2>
+      <div class="seg"><button class="btn" id="wPrev" aria-label="Semaine précédente">←</button><button class="btn" id="wNow">Aujourd'hui</button><button class="btn" id="wNext" aria-label="Semaine suivante">→</button></div>
+    </div>
+    <div id="weekBody" class="list"></div>
+  </section>
+
+  <section id="v-req" hidden>
+    <div class="grid2">
+      <form class="panel" id="rqForm" autocomplete="off">
+        <h2 style="margin-bottom:4px">Soumettre une demande</h2>
+        <p class="muted small" style="margin:0 0 12px">Une demande ne devient une tâche que si le Chef de Programme l'accepte et lui donne une date.</p>
+        <div class="list">
+          <div class="field"><label for="rqWho">Demandeur</label><input id="rqWho" required maxlength="80" placeholder="Nom de la personne qui demande"></div>
+          <div class="field"><label for="rqTitle">Ce qui est demandé</label><input id="rqTitle" required maxlength="140"></div>
+          <div class="field"><label for="rqWhy">Pourquoi et pour quoi faire</label><textarea id="rqWhy" maxlength="600"></textarea></div>
+          <div class="grid2">
+            <div class="field"><label for="rqDate">Date souhaitée</label><input id="rqDate" type="date"></div>
+            <div class="field"><label for="rqHours">Temps estimé (heures)</label><input id="rqHours" type="number" min="0" step="0.5"></div>
+          </div>
+          <div><button class="btn pri" id="rqSend" type="submit">Envoyer la demande</button> <span class="muted small" id="rqMsg"></span></div>
+        </div>
+      </form>
+      <div>
+        <h2 style="margin-bottom:10px">Boîte de demandes</h2>
+        <div id="reqList" class="list"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="v-log" hidden>
+    <h2 style="margin-bottom:10px">Journal des changements</h2>
+    <div class="panel"><div class="log" id="logList"></div></div>
+  </section>
+</div>
+
+<dialog id="dlgTask">
+  <form method="dialog" id="taskForm">
+    <h2 id="taskDlgTitle" style="margin-bottom:12px">Tâche</h2>
+    <div class="list">
+      <div class="field"><label for="tkTitle">Intitulé</label><input id="tkTitle" required maxlength="160"></div>
+      <div class="grid2">
+        <div class="field"><label for="tkStart">Début</label><input id="tkStart" type="date" required></div>
+        <div class="field"><label for="tkEnd">Fin</label><input id="tkEnd" type="date" required></div>
+        <div class="field"><label for="tkMission">Mission du contrat</label><select id="tkMission"></select></div>
+        <div class="field"><label for="tkPhase">Phase</label><select id="tkPhase"></select></div>
+        <div class="field"><label for="tkOwner">Responsable</label><select id="tkOwner"></select></div>
+      </div>
+      <div class="field"><label for="tkDeliv">Livrable attendu</label><input id="tkDeliv" maxlength="200"></div>
+      <div class="row">
+        <button type="button" class="btn danger" id="tkDelete">Supprimer</button>
+        <span style="display:flex;gap:8px"><button type="button" class="btn" id="tkCancel">Annuler</button><button type="submit" class="btn pri">Enregistrer</button></span>
+      </div>
+      <div class="err" id="tkErr" hidden></div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlgDecide">
+  <form method="dialog" id="decForm">
+    <h2 style="margin-bottom:6px">Décision sur la demande</h2>
+    <div id="decSummary" class="muted" style="margin-bottom:12px"></div>
+    <div class="list">
+      <div class="seg" id="decChoice">
+        <button type="button" data-d="accepted" aria-pressed="true">Accepter et planifier</button>
+        <button type="button" data-d="deferred" aria-pressed="false">Reporter</button>
+        <button type="button" data-d="declined" aria-pressed="false">Refuser</button>
+      </div>
+      <div id="decAccept" class="grid2">
+        <div class="field" style="grid-column:1/-1"><label for="dcTitle">Intitulé de la tâche</label><input id="dcTitle" maxlength="160"></div>
+        <div class="field"><label for="dcStart">Début</label><input id="dcStart" type="date"></div>
+        <div class="field"><label for="dcEnd">Fin</label><input id="dcEnd" type="date"></div>
+        <div class="field"><label for="dcMission">Mission du contrat</label><select id="dcMission"></select></div>
+        <div class="field"><label for="dcOwner">Responsable</label><select id="dcOwner"></select></div>
+      </div>
+      <div id="decDefer" class="field" hidden><label for="dcNewDate">Nouvelle date de réexamen</label><input id="dcNewDate" type="date"></div>
+      <div class="field"><label for="dcNote">Message au demandeur <span id="dcNoteReq" class="muted"></span></label><textarea id="dcNote" maxlength="500"></textarea></div>
+      <div class="row"><button type="button" class="btn" id="dcCancel">Annuler</button><button type="submit" class="btn pri" id="dcSave">Enregistrer la décision</button></div>
+      <div class="err" id="dcErr" hidden></div>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(function(){
+"use strict";
+var START="2026-10-20",END="2027-01-19";
+var MISSIONS={1:"Orienter l'équipe",2:"Appliquer les orientations",3:"Faire appliquer les standards",4:"Standards IFC et secteur",5:"Processus comptable",6:"Suivi et évaluation"};
+var PHASES={0:"Rythme continu",1:"Phase 1 · Prise en main (20 oct. – 16 nov.)",2:"Phase 2 · Conception (17 nov. – 14 déc.)",3:"Phase 3 · Application et adoption (15 déc. – 4 janv.)",4:"Phase 4 · Bilan (5 – 19 janv.)"};
+var STATUS={todo:"À faire",doing:"En cours",done:"Fait",blocked:"Bloqué"};
+var OWNERS={JFO:"JFO",CP:"Chef de Programme",BOTH:"JFO et Chef"};
+var RSTAT={pending:"En attente",accepted:"Acceptée",deferred:"Reportée",declined:"Refusée"};
+function $(id){return document.getElementById(id)}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function pd(s){var p=s.split("-").map(Number);return new Date(p[0],p[1]-1,p[2],12)}
+function iso(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function fmt(s){return s?pd(s).toLocaleDateString("fr-FR",{day:"numeric",month:"short"}):""}
+function fmtLong(ms){return new Date(ms).toLocaleString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}
+function addDays(d,n){var x=new Date(d);x.setDate(x.getDate()+n);return x}
+function mondayOf(d){var x=new Date(d),k=(x.getDay()+6)%7;x.setDate(x.getDate()-k);x.setHours(12,0,0,0);return x}
+var W0=mondayOf(pd(START));
+function wk(s){return Math.round((mondayOf(pd(s))-W0)/(7*864e5))}
+var NW=wk(END)+1;
+var TODAY=iso(new Date());
+var curW=Math.max(0,Math.min(NW-1,wk(TODAY)));
+function phaseOf(s){return s<="2026-11-16"?1:s<="2026-12-14"?2:s<="2027-01-04"?3:4}
+
+var db=null,user=null,me={id:null,name:""},isChef=false,canWrite=true;
+var plan=[],progress={},requests=[],decisions={},logs=[],names={};
+var sel=null,weekSel=curW,detailKey="",decReq=null,decChoice="accepted",editId=null;
+
+function stOf(id){return (progress[id]&&progress[id].status)||"todo"}
+function sortedPlan(){return plan.slice().sort(function(a,b){return (a.phase-b.phase)||(a.start<b.start?-1:a.start>b.start?1:0)||((a.order||0)-(b.order||0))||(a.title<b.title?-1:1)})}
+function isLate(t){return TODAY>t.end&&stOf(t.id)!=="done"&&TODAY>=START}
+function nameOf(id){if(!id)return "Quelqu'un";if(id===me.id)return me.name||"Vous";return names[id]||"Quelqu'un"}
+
+function fill(sel2,map,val){var h="";Object.keys(map).forEach(function(k){h+='<option value="'+esc(k)+'">'+esc(map[k])+'</option>'});$(sel2).innerHTML=h;if(val!=null)$(sel2).value=String(val)}
+fill("tkMission",MISSIONS,5);fill("tkPhase",PHASES,2);fill("tkOwner",OWNERS,"JFO");fill("dcMission",MISSIONS,5);fill("dcOwner",OWNERS,"JFO");
+
+var raf=0;
+function schedule(){if(raf)return;raf=requestAnimationFrame(function(){raf=0;renderAll()})}
+function showErr(e){var b=$("errBox");b.hidden=false;b.textContent="Les données partagées ne répondent pas ("+((e&&e.code)||"erreur")+"). Rechargez la page si cela persiste."}
+
+function renderAll(){renderStats();renderGantt();renderDetailIfChanged();renderWeek();renderReq();renderLog()}
+
+function renderStats(){
+  var n=plan.length,c={todo:0,doing:0,done:0,blocked:0},late=0;
+  plan.forEach(function(t){c[stOf(t.id)]++;if(isLate(t))late++});
+  var m=$("meter");
+  m.innerHTML=n?'<i style="width:'+(c.done/n*100)+'%;background:var(--done)"></i><i style="width:'+(c.doing/n*100)+'%;background:var(--doing)"></i><i style="width:'+(c.blocked/n*100)+'%;background:var(--blocked)"></i>':"";
+  var w=TODAY<START?"avant le début":TODAY>END?"période terminée":"semaine "+(curW+1)+" sur "+NW;
+  $("statTxt").textContent=n?c.done+" faites sur "+n+" · "+c.doing+" en cours · "+late+" en retard · "+w:"Aucune tâche au calendrier";
+  var pend=requests.filter(function(r){return !decisions[r.id]}).length;
+  var bd=$("reqBadge");bd.hidden=!pend;bd.textContent=pend;
+}
+
+function ganttHTML(){
+  var h='<div class="gantt" style="--nw:'+NW+'"><div class="g-row"><div class="g-head lab">Tâche</div>';
+  for(var i=0;i<NW;i++){h+='<div class="g-head'+(i===curW&&TODAY>=START&&TODAY<=iso(addDays(W0,NW*7))?" now":"")+'">S'+(i+1)+'<small>'+esc(fmt(iso(addDays(W0,7*i))))+'</small></div>'}
+  h+='</div>';
+  var list=sortedPlan();
+  if(!list.length)return h+'<div class="empty">Le calendrier est vide. '+(isChef?'Ajoutez la première tâche avec le bouton ci-dessus.':'Le Chef de Programme y placera les tâches.')+'</div></div>';
+  var last=null;
+  list.forEach(function(t){
+    if(t.phase!==last){last=t.phase;h+='<div class="g-row"><div class="g-phase">'+esc(PHASES[t.phase]||"Autre")+'</div></div>'}
+    var a=Math.max(0,wk(t.start)),b=Math.min(NW-1,wk(t.end));if(b<a)b=a;
+    var st=stOf(t.id),late=isLate(t);
+    h+='<div class="g-row'+(sel===t.id?" sel":"")+'">';
+    h+='<button class="g-lab" data-sel="'+esc(t.id)+'"><span class="t">'+esc(t.title)+'</span><span class="s">'+esc(OWNERS[t.owner]||t.owner)+' · '+esc(MISSIONS[t.mission]||"")+'</span></button>';
+    for(var i=0;i<NW;i++){h+='<div class="g-cell'+(i===curW?" now":"")+'" style="grid-column:'+(i+2)+'"></div>'}
+    h+='<button class="g-bar '+st+(late?" late":"")+(t.source==="demande"?" dem":"")+'" data-sel="'+esc(t.id)+'" style="grid-column:'+(a+2)+' / '+(b+3)+'" title="'+esc(t.title+" · "+fmt(t.start)+" → "+fmt(t.end)+" · "+STATUS[st]+(late?" · en retard":""))+'">'+esc(fmt(t.start)+" → "+fmt(t.end))+'</button>';
+    h+='</div>';
+  });
+  return h+'</div>';
+}
+function renderGantt(){$("gantt").innerHTML=ganttHTML()}
+
+function detailData(){var t=plan.filter(function(x){return x.id===sel})[0];return t?JSON.stringify([t,progress[sel]||null,canWrite,isChef,names]):""}
+function renderDetailIfChanged(){var k=detailData();if(k!==detailKey){detailKey=k;renderDetail()}}
+function renderDetail(){
+  var el=$("detail"),t=plan.filter(function(x){return x.id===sel})[0];
+  if(!t){el.innerHTML='<div class="muted">Choisissez une tâche pour voir son détail, changer son état ou ajouter une note.</div>';return}
+  var p=progress[t.id]||{},st=p.status||"todo",late=isLate(t);
+  var h='<div class="row"><h2>'+esc(t.title)+'</h2><span>'+'<span class="pill '+st+'">'+esc(STATUS[st])+'</span> '+(late?'<span class="pill late">En retard</span> ':'')+(t.source==="demande"?'<span class="pill dem">Issue d\'une demande</span>':'')+'</span></div>';
+  h+='<dl class="kv"><dt>Dates</dt><dd>'+esc(fmt(t.start))+' → '+esc(fmt(t.end))+'</dd><dt>Responsable</dt><dd>'+esc(OWNERS[t.owner]||t.owner)+'</dd><dt>Mission du contrat</dt><dd>'+esc(MISSIONS[t.mission]||"")+'</dd>'+(t.deliverable?'<dt>Livrable</dt><dd>'+esc(t.deliverable)+'</dd>':'')+'</dl>';
+  h+='<div class="seg" id="stSeg" role="group" aria-label="État">';
+  Object.keys(STATUS).forEach(function(k){h+='<button type="button" data-st="'+k+'" aria-pressed="'+(k===st)+'"'+(canWrite?'':' disabled')+'>'+esc(STATUS[k])+'</button>'});
+  h+='</div><div class="field" style="margin-top:10px"><label for="dNote">Note (ce qui a été fait, ce qui bloque)</label><textarea id="dNote" maxlength="800"'+(canWrite?'':' disabled')+'>'+esc(p.note||"")+'</textarea></div>';
+  h+='<div class="row" style="margin-top:10px"><span class="muted small">'+(p.at?'Dernière mise à jour par '+esc(nameOf(p.byId))+', '+esc(fmtLong(p.at)):'Pas encore de mise à jour.')+'</span><span style="display:flex;gap:8px">'+(isChef?'<button class="btn" data-edit="'+esc(t.id)+'">Modifier la tâche</button>':'')+'<button class="btn pri" id="saveProg"'+(canWrite?'':' disabled')+'>Enregistrer</button></span></div>';
+  el.innerHTML=h;
+}
+
+function weekHTML(){
+  var ws=addDays(W0,7*weekSel),we=addDays(ws,6),s=iso(ws),e=iso(we);
+  $("weekTitle").textContent="Semaine "+(weekSel+1)+" · du "+fmt(s)+" au "+fmt(e)+(weekSel===curW?" (en cours)":"");
+  var h="",late=sortedPlan().filter(isLate);
+  if(late.length&&weekSel===curW){h+='<div class="note"><b>En retard :</b> '+late.map(function(t){return esc(t.title)+' (échéance '+esc(fmt(t.end))+')'}).join(" · ")+'</div>'}
+  var items=sortedPlan().filter(function(t){return t.start<=e&&t.end>=s});
+  if(!items.length)return h+'<div class="empty">Aucune tâche prévue cette semaine.</div>';
+  items.forEach(function(t){
+    var st=stOf(t.id),due=t.end>=s&&t.end<=e;
+    h+='<div class="card'+(isLate(t)?" late":"")+'"><div class="row"><b>'+esc(t.title)+'</b><span><span class="pill '+st+'">'+esc(STATUS[st])+'</span>'+(due?' <span class="pill dem">Échéance '+esc(fmt(t.end))+'</span>':'')+'</span></div>';
+    h+='<div class="muted small">'+esc(OWNERS[t.owner]||t.owner)+' · '+esc(MISSIONS[t.mission]||"")+' · '+esc(fmt(t.start))+' → '+esc(fmt(t.end))+(t.deliverable?' · Livrable : '+esc(t.deliverable):'')+'</div>';
+    if(progress[t.id]&&progress[t.id].note)h+='<div class="small">'+esc(progress[t.id].note)+'</div>';
+    h+='<div class="seg">';Object.keys(STATUS).forEach(function(k){h+='<button type="button" data-quick="'+esc(t.id)+'" data-st="'+k+'" aria-pressed="'+(k===st)+'"'+(canWrite?'':' disabled')+'>'+esc(STATUS[k])+'</button>'});
+    h+='<button type="button" data-open="'+esc(t.id)+'">Détail</button></div></div>';
+  });
+  return h;
+}
+function renderWeek(){$("weekBody").innerHTML=weekHTML()}
+
+function renderReq(){
+  var el=$("reqList");
+  if(!requests.length){el.innerHTML='<div class="empty panel">Aucune demande pour l\'instant.</div>';return}
+  var list=requests.slice().sort(function(a,b){var da=decisions[a.id]?1:0,db2=decisions[b.id]?1:0;return (da-db2)||(b.at-a.at)});
+  el.innerHTML=list.map(function(r){
+    var d=decisions[r.id],stt=d?d.status:"pending";
+    var h='<div class="card"><div class="row"><b>'+esc(r.title)+'</b><span class="pill '+(stt==="accepted"?"done":stt==="declined"?"blocked":stt==="deferred"?"dem":"doing")+'">'+esc(RSTAT[stt])+'</span></div>';
+    h+='<div class="muted small">De '+esc(r.who)+' · reçue le '+esc(fmtLong(r.at))+(r.needBy?' · souhaitée pour le '+esc(fmt(r.needBy)):'')+(r.hours?' · '+esc(r.hours)+' h estimées':'')+'</div>';
+    if(r.why)h+='<div>'+esc(r.why)+'</div>';
+    if(d){h+='<div class="note"><b>Décision de '+esc(nameOf(d.byId))+'</b>'+(d.note?' : '+esc(d.note):'')+(d.newDate?' · réexamen le '+esc(fmt(d.newDate)):'')+'</div>'}
+    if(isChef)h+='<div><button class="btn'+(d?'':' pri')+'" data-decide="'+esc(r.id)+'">'+(d?'Revoir la décision':'Décider')+'</button></div>';
+    return h+'</div>';
+  }).join("");
+}
+function renderLog(){
+  var el=$("logList");
+  el.innerHTML=logs.length?logs.map(function(l){return '<div><time>'+esc(fmtLong(l.at))+'</time><span><b>'+esc(nameOf(l.uid))+'</b> '+esc(l.text)+'</span></div>'}).join(""):'<div class="muted" style="padding:8px 0">Aucun changement enregistré.</div>';
+}
+
+/* ---------- écritures ---------- */
+function mark(pr){return pr.catch(function(e){showErr(e);throw e})}
+function addLog(text){return db.collection("log").add({at:Date.now(),uid:me.id||"",text:text}).catch(function(){})}
+function saveProgress(id,status,note){
+  var t=plan.filter(function(x){return x.id===id})[0];if(!t||!db)return Promise.resolve();
+  var prev=progress[id]||{},ns=status||prev.status||"todo",nn=note==null?(prev.note||""):note;
+  if(ns===(prev.status||"todo")&&nn===(prev.note||""))return Promise.resolve();
+  return mark(db.doc("progress/"+id).set({status:ns,note:nn,byId:me.id||"",at:Date.now()})).then(function(){
+    var parts=[];if(ns!==(prev.status||"todo"))parts.push("a passé « "+t.title+" » à « "+STATUS[ns]+" »");if(nn!==(prev.note||""))parts.push("a mis à jour la note de « "+t.title+" »");
+    return addLog(parts.join(" ; "));
+  });
+}
+function openTask(id){
+  editId=id;var t=id==="new"?null:plan.filter(function(x){return x.id===id})[0];
+  $("taskDlgTitle").textContent=t?"Modifier la tâche":"Ajouter une tâche";
+  var s0=TODAY<START?START:(TODAY>END?END:TODAY);
+  $("tkTitle").value=t?t.title:"";$("tkStart").value=t?t.start:s0;$("tkEnd").value=t?t.end:iso(addDays(pd(s0),6));
+  $("tkMission").value=String(t?t.mission:5);$("tkPhase").value=String(t?t.phase:phaseOf(s0));$("tkOwner").value=t?t.owner:"JFO";$("tkDeliv").value=t?(t.deliverable||""):"";
+  $("tkDelete").hidden=!t;$("tkDelete").textContent="Supprimer";$("tkDelete").dataset.arm="";$("tkErr").hidden=true;
+  $("dlgTask").showModal();
+}
+function saveTask(ev){
+  ev.preventDefault();var err=$("tkErr");err.hidden=true;
+  var title=$("tkTitle").value.trim(),s=$("tkStart").value,e=$("tkEnd").value;
+  if(!title||!s||!e){err.textContent="Intitulé et dates sont obligatoires.";err.hidden=false;return}
+  if(e<s){err.textContent="La fin ne peut pas précéder le début.";err.hidden=false;return}
+  var data={title:title,start:s,end:e,mission:+$("tkMission").value,phase:+$("tkPhase").value,owner:$("tkOwner").value,deliverable:$("tkDeliv").value.trim()};
+  var isNew=editId==="new",ref=isNew?db.collection("plan").doc():db.doc("plan/"+editId);
+  var old=isNew?{}:(plan.filter(function(x){return x.id===editId})[0]||{});
+  data.source=old.source||"contrat";if(old.requestId)data.requestId=old.requestId;data.order=old.order||0;
+  mark(ref.set(data)).then(function(){$("dlgTask").close();if(isNew)sel=ref.id;return addLog((isNew?"a ajouté la tâche « ":"a modifié la tâche « ")+title+" » ("+fmt(s)+" → "+fmt(e)+")")}).catch(function(){});
+}
+function deleteTask(){
+  var b=$("tkDelete");if(b.dataset.arm!=="1"){b.dataset.arm="1";b.textContent="Confirmer la suppression";return}
+  var t=plan.filter(function(x){return x.id===editId})[0];if(!t)return;
+  mark(db.doc("plan/"+editId).delete()).then(function(){$("dlgTask").close();if(sel===editId)sel=null;return addLog("a supprimé la tâche « "+t.title+" »")}).catch(function(){});
+}
+
+function submitRequest(ev){
+  ev.preventDefault();if(!db)return;
+  var who=$("rqWho").value.trim(),title=$("rqTitle").value.trim();if(!who||!title)return;
+  var r={who:who,title:title,why:$("rqWhy").value.trim(),needBy:$("rqDate").value||"",hours:$("rqHours").value?+$("rqHours").value:0,byId:me.id||"",at:Date.now()};
+  $("rqSend").disabled=true;
+  mark(db.collection("requests").add(r)).then(function(){$("rqForm").reset();$("rqMsg").textContent="Demande envoyée. Elle attend la décision du Chef de Programme.";return addLog("a soumis la demande « "+title+" » (de "+who+")")}).catch(function(){}).then(function(){$("rqSend").disabled=false});
+}
+function openDecide(id){
+  var r=requests.filter(function(x){return x.id===id})[0];if(!r)return;decReq=r;
+  var d=decisions[id];decChoice=d?d.status:"accepted";
+  $("decSummary").innerHTML='<b>'+esc(r.title)+'</b><br>De '+esc(r.who)+(r.why?' · '+esc(r.why):'');
+  var s0=r.needBy&&r.needBy>=START?r.needBy:(TODAY<START?START:TODAY);
+  $("dcTitle").value=r.title;$("dcStart").value=s0;$("dcEnd").value=iso(addDays(pd(s0),6));$("dcMission").value="5";$("dcOwner").value="JFO";$("dcNewDate").value=d&&d.newDate||"";$("dcNote").value=d&&d.note||"";
+  $("dcErr").hidden=true;syncDecide();$("dlgDecide").showModal();
+}
+function syncDecide(){
+  Array.prototype.forEach.call($("decChoice").children,function(b){b.setAttribute("aria-pressed",String(b.dataset.d===decChoice))});
+  $("decAccept").hidden=decChoice!=="accepted";$("decDefer").hidden=decChoice!=="deferred";
+  $("dcNoteReq").textContent=decChoice==="accepted"?"(facultatif)":"(obligatoire)";
+}
+function saveDecision(ev){
+  ev.preventDefault();var err=$("dcErr");err.hidden=true;var r=decReq;if(!r)return;
+  var note=$("dcNote").value.trim();
+  if(decChoice!=="accepted"&&!note){err.textContent="Écrivez un message pour le demandeur.";err.hidden=false;return}
+  var dec={status:decChoice,note:note,byId:me.id||"",at:Date.now()},p=Promise.resolve(),prev=decisions[r.id];
+  if(decChoice==="deferred"){dec.newDate=$("dcNewDate").value||""}
+  if(decChoice==="accepted"){
+    var title=$("dcTitle").value.trim(),s=$("dcStart").value,e=$("dcEnd").value;
+    if(!title||!s||!e||e<s){err.textContent="Donnez un intitulé et des dates valides (la fin ne précède pas le début).";err.hidden=false;return}
+    var tid=prev&&prev.taskId;var ref=tid?db.doc("plan/"+tid):db.collection("plan").doc();
+    dec.taskId=ref.id;
+    p=mark(ref.set({title:title,start:s,end:e,mission:+$("dcMission").value,phase:phaseOf(s),owner:$("dcOwner").value,deliverable:"",source:"demande",requestId:r.id,order:0}));
+  }
+  p.then(function(){return mark(db.doc("decisions/"+r.id).set(dec))}).then(function(){$("dlgDecide").close();return addLog("a "+(decChoice==="accepted"?"accepté":decChoice==="deferred"?"reporté":"refusé")+" la demande « "+r.title+" »")}).catch(function(){});
+}
+
+/* ---------- interactions ---------- */
+function showTab(name){
+  ["cal","week","req","log"].forEach(function(k){$("v-"+k).hidden=k!==name;$("tab-"+k).setAttribute("aria-selected",String(k===name))});
+  try{if(location.hash!=="#"+name)history.replaceState(null,"","#"+name)}catch(e){}
+}
+document.addEventListener("click",function(ev){
+  var t=ev.target.closest("[data-tab],[data-sel],[data-st],[data-quick],[data-open],[data-edit],[data-decide]");if(!t)return;
+  if(t.dataset.tab)return showTab(t.dataset.tab);
+  if(t.dataset.sel){sel=t.dataset.sel;detailKey="";renderGantt();renderDetailIfChanged();return $("detail").scrollIntoView({block:"nearest",behavior:"smooth"})}
+  if(t.dataset.quick){return saveProgress(t.dataset.quick,t.dataset.st,null)}
+  if(t.dataset.open){sel=t.dataset.open;detailKey="";showTab("cal");renderGantt();renderDetailIfChanged();return}
+  if(t.dataset.edit)return openTask(t.dataset.edit);
+  if(t.dataset.decide)return openDecide(t.dataset.decide);
+  if(t.dataset.st&&t.parentNode.id==="stSeg"){Array.prototype.forEach.call(t.parentNode.children,function(b){b.setAttribute("aria-pressed",String(b===t))})}
+});
+$("detail").addEventListener("click",function(ev){
+  if(ev.target.id==="saveProg"){
+    var pressed=$("stSeg").querySelector('[aria-pressed="true"]');
+    saveProgress(sel,pressed?pressed.dataset.st:null,$("dNote").value.trim());
+  }
+});
+$("addTask").addEventListener("click",function(){openTask("new")});
+$("taskForm").addEventListener("submit",saveTask);$("tkCancel").addEventListener("click",function(){$("dlgTask").close()});$("tkDelete").addEventListener("click",deleteTask);
+$("decForm").addEventListener("submit",saveDecision);$("dcCancel").addEventListener("click",function(){$("dlgDecide").close()});
+$("decChoice").addEventListener("click",function(ev){var b=ev.target.closest("button[data-d]");if(!b)return;decChoice=b.dataset.d;syncDecide()});
+$("rqForm").addEventListener("submit",submitRequest);
+$("wPrev").addEventListener("click",function(){weekSel=Math.max(0,weekSel-1);renderWeek()});
+$("wNext").addEventListener("click",function(){weekSel=Math.min(NW-1,weekSel+1);renderWeek()});
+$("wNow").addEventListener("click",function(){weekSel=curW;renderWeek()});
+window.addEventListener("hashchange",function(){var h=location.hash.slice(1);if(["cal","week","req","log"].indexOf(h)>-1)showTab(h)});
+(function(){var h=location.hash.slice(1);if(["cal","week","req","log"].indexOf(h)>-1)showTab(h)})();
+
+/* ---------- données partagées ---------- */
+function loadNames(){
+  if(!user)return;var ids={};
+  Object.keys(progress).forEach(function(k){if(progress[k].byId)ids[progress[k].byId]=1});
+  logs.forEach(function(l){if(l.uid)ids[l.uid]=1});
+  Object.keys(decisions).forEach(function(k){if(decisions[k].byId)ids[decisions[k].byId]=1});
+  var need=Object.keys(ids).filter(function(i){return !(i in names)});if(!need.length)return;
+  user.profiles(need).then(function(ps){need.forEach(function(i){names[i]=(ps[i]&&ps[i].name)||""});schedule()});
+}
+function start(){
+  var timer=setTimeout(function(){$("loadNote").hidden=false},10000),got=0;
+  function first(){if(!got){got=1;clearTimeout(timer);$("loadNote").hidden=true}}
+  function ok(s){first()}
+  db.collection("plan").onSnapshot(function(s){plan=s.docs.map(function(d){var x=d.data();x.id=d.id;return x});ok();schedule()},showErr);
+  db.collection("progress").onSnapshot(function(s){progress={};s.docs.forEach(function(d){progress[d.id]=d.data()});ok();loadNames();schedule()},showErr);
+  db.collection("requests").onSnapshot(function(s){requests=s.docs.map(function(d){var x=d.data();x.id=d.id;return x});ok();schedule()},showErr);
+  db.collection("decisions").onSnapshot(function(s){decisions={};s.docs.forEach(function(d){decisions[d.id]=d.data()});ok();loadNames();schedule()},showErr);
+  db.collection("log").orderBy("at","desc").limit(100).onSnapshot(function(s){logs=s.docs.map(function(d){return d.data()});ok();loadNames();schedule()},showErr);
+}
+renderAll();
+(async function(){
+  try{
+    if(!window.claude||!claude.use){$("roleChip").textContent="Lecture seule";return}
+    user=await claude.use("user");db=await claude.use("db");
+    if(user){me=await user.me();isChef=await user.canEdit();var cw=await user.can("data.write");canWrite=cw!==false}
+    var rc=$("roleChip");rc.className="chip role";rc.textContent=isChef?"Chef de Programme":"Participant";
+    if(me.name){var n=document.createElement("span");n.className="chip";n.textContent=me.name;$("who").appendChild(n)}
+    if(!db){$("errBox").hidden=false;$("errBox").textContent="Les données partagées ne sont pas disponibles dans cette vue. Ouvrez la page depuis son lien dans Claude.";return}
+    if(!canWrite){var ro=document.createElement("span");ro.className="chip";ro.textContent="Lecture seule";$("who").appendChild(ro)}
+    $("addTask").hidden=!isChef;
+    start();schedule();
+  }catch(e){showErr(e)}
+})();
+})();
+</script>
+
+</body></html>
