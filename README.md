@@ -10,7 +10,7 @@ Le fichier `index.html` est une page statique compatible avec GitHub Pages. Dans
 
 1. Dans Firebase Authentication → Sign-in method, activer **Google**.
 2. Dans Authentication → Settings → Authorized domains, ajouter `ygaltasy-design.github.io` (si pas déjà présent).
-3. Dans Firestore → Rules, **fusionner** le contenu de `firestore-calendrier.snippet.rules` dans le `match /databases/{database}/documents` existant. Ne jamais remplacer les autres règles par ce seul extrait.
+3. Dans Firestore → Rules, remplacer les anciennes règles (fournies par Ygal) par le contenu du fichier complet `firestore.rules`, puis cliquer sur **Publier**. Cette version conserve l'accès antérieur aux autres collections, mais exclut explicitement `jfo_calendar` de la règle générale. Si les règles en production ont changé entre-temps, comparer d'abord les deux versions.
 4. Tester : visiteur anonyme peut consulter `/jfo_calendar/v1/plan`; compte Google connecté peut soumettre une demande ; seul `ygaltasy@gmail.com` peut créer et modifier les tâches ou prendre une décision.
 
 Le projet Firebase ciblé est `gestionpax-d9f5d`. La configuration du SDK Web est publique par conception et ne contient **aucune** clé privée d'administration.
@@ -25,4 +25,4 @@ Le projet Firebase ciblé est `gestionpax-d9f5d`. La configuration du SDK Web es
 
 **Attention :** les données précédemment enregistrées dans l'environnement Claude ne migrent pas automatiquement vers Firestore. Export ou ressaisie nécessaire pour les conserver.
 
-**Attention :** le calendrier n'aura pas d'écritures opérationnelles tant que les règles Firestore n'auront pas été intégrées et publiées. Toute règle globale déjà permissive doit aussi être examinée, car les règles Firestore sont additives.
+**Attention :** tant que les nouvelles règles Firestore ne sont pas publiées, les anciennes règles autorisent toujours n'importe quel utilisateur authentifié à modifier les documents du calendrier. Le masquage des boutons seul ne protège pas les données.
