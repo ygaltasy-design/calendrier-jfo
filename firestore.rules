@@ -1,0 +1,58 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function jfoSignedIn() {
+      return request.auth != null;
+    }
+    function jfoChef() {
+      return jfoSignedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == 'ygaltasy@gmail.com';
+    }
+
+    // Conserve les autorisations actuelles pour les autres collections.
+    // La racine jfo_calendar est EXCLUE de cette règle générale.
+    match /{rootCollection}/{document=**} {
+      allow read, write: if rootCollection != 'jfo_calendar' && request.auth != null;
+    }
+
+    match /jfo_calendar/{calendarId} {
+      allow read, write: if false;
+
+      match /plan/{taskId} {
+        allow read: if calendarId == 'v1';
+        allow create, update, delete: if calendarId == 'v1' && jfoChef();
+      }
+      match /progress/{taskId} {
+        allow read: if calendarId == 'v1';
+        allow create, update: if calendarId == 'v1' && jfoSignedIn()
+          && request.resource.data.byId == request.auth.uid
+          && request.resource.data.keys().hasOnly(['status','note','byId','at'])
+          && request.resource.data.status in ['todo','doing','done','blocked']
+          && request.resource.data.note is string;
+        allow delete: if calendarId == 'v1' && jfoChef();
+      }
+      match /requests/{requestId} {
+        allow read: if calendarId == 'v1' && jfoSignedIn();
+        allow create: if calendarId == 'v1' && jfoSignedIn()
+          && request.resource.data.byId == request.auth.uid
+          && request.resource.data.keys().hasOnly(['who','title','why','needBy','hours','byId','at'])
+          && request.resource.data.who is string
+          && request.resource.data.title is string;
+        allow update, delete: if calendarId == 'v1' && jfoChef();
+      }
+      match /decisions/{requestId} {
+        allow read: if calendarId == 'v1' && jfoSignedIn();
+        allow create, update, delete: if calendarId == 'v1' && jfoChef();
+      }
+      match /log/{logId} {
+        allow read: if calendarId == 'v1' && jfoSignedIn();
+        allow create: if calendarId == 'v1' && jfoSignedIn()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['at','uid','text'])
+          && request.resource.data.text is string;
+        allow update, delete: if false;
+      }
+    }
+  }
+}
