@@ -116,7 +116,7 @@ dialog::backdrop{background:rgba(10,20,16,.55)}
       <h1>Calendrier de travail JFO</h1>
       <p>Pax Justine Ahon, Financière Junior, avec le Chef de Programme. Période probatoire du 20 octobre 2026 au 19 janvier 2027.</p>
     </div>
-    <div class="who" id="who"><span class="chip" id="roleChip">Connexion…</span></div>
+    <div class="who" id="who"><span class="chip" id="roleChip">Lecture publique</span><button class="btn" id="loginBtn" type="button">Se connecter avec Google</button><button class="btn" id="logoutBtn" type="button" hidden>Déconnexion</button></div>
   </header>
 
   <div class="rule"><b>Règle de travail.</b> Ce qui n'est pas au calendrier n'est pas à faire. Toute autre demande, d'où qu'elle vienne, passe par l'onglet Demandes et reçoit une décision du Chef de Programme : acceptée avec une date, reportée ou refusée.</div>
@@ -174,7 +174,7 @@ dialog::backdrop{background:rgba(10,20,16,.55)}
             <div class="field"><label for="rqDate">Date souhaitée</label><input id="rqDate" type="date"></div>
             <div class="field"><label for="rqHours">Temps estimé (heures)</label><input id="rqHours" type="number" min="0" step="0.5"></div>
           </div>
-          <div><button class="btn pri" id="rqSend" type="submit">Envoyer la demande</button> <span class="muted small" id="rqMsg"></span></div>
+          <div><button class="btn pri" id="rqSend" type="submit" disabled>Envoyer la demande</button> <span class="muted small" id="rqMsg">Connectez-vous avec Google pour faire une demande.</span></div>
         </div>
       </form>
       <div>
@@ -237,9 +237,18 @@ dialog::backdrop{background:rgba(10,20,16,.55)}
   </form>
 </dialog>
 
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script>
 (function(){
 "use strict";
+var firebaseConfig={apiKey:"AIzaSyAWeo69Y6LZLd07hWH8CeP1VIsWcIxZhh4",authDomain:"gestionpax-d9f5d.firebaseapp.com",projectId:"gestionpax-d9f5d",storageBucket:"gestionpax-d9f5d.firebasestorage.app",messagingSenderId:"617672384520",appId:"1:617672384520:web:22b0640462007aacc571bd"};
+firebase.initializeApp(firebaseConfig);
+var auth=firebase.auth(),firestore=firebase.firestore();
+var ROOT="jfo_calendar/v1/";
+var database={collection:function(name){return firestore.collection(ROOT+name)},doc:function(path){return firestore.doc(ROOT+path)}};
+var OWNER_EMAIL="ygaltasy@gmail.com";
 var START="2026-10-20",END="2027-01-19";
 var MISSIONS={1:"Orienter l'équipe",2:"Appliquer les orientations",3:"Faire appliquer les standards",4:"Standards IFC et secteur",5:"Processus comptable",6:"Suivi et évaluation"};
 var PHASES={0:"Rythme continu",1:"Phase 1 · Prise en main (20 oct. – 16 nov.)",2:"Phase 2 · Conception (17 nov. – 14 déc.)",3:"Phase 3 · Application et adoption (15 déc. – 4 janv.)",4:"Phase 4 · Bilan (5 – 19 janv.)"};
@@ -261,7 +270,7 @@ var TODAY=iso(new Date());
 var curW=Math.max(0,Math.min(NW-1,wk(TODAY)));
 function phaseOf(s){return s<="2026-11-16"?1:s<="2026-12-14"?2:s<="2027-01-04"?3:4}
 
-var db=null,user=null,me={id:null,name:""},isChef=false,canWrite=true;
+var db=database,me={id:null,name:""},isChef=false,canWrite=false;
 var plan=[],progress={},requests=[],decisions={},logs=[],names={};
 var sel=null,weekSel=curW,detailKey="",decReq=null,decChoice="accepted",editId=null;
 
@@ -366,9 +375,9 @@ function renderLog(){
 
 /* ---------- écritures ---------- */
 function mark(pr){return pr.catch(function(e){showErr(e);throw e})}
-function addLog(text){return db.collection("log").add({at:Date.now(),uid:me.id||"",text:text}).catch(function(){})}
+function addLog(text){if(!me.id)return Promise.resolve();return db.collection("log").add({at:Date.now(),uid:me.id,text:text}).catch(function(){})}
 function saveProgress(id,status,note){
-  var t=plan.filter(function(x){return x.id===id})[0];if(!t||!db)return Promise.resolve();
+  var t=plan.filter(function(x){return x.id===id})[0];if(!t||!db||!canWrite)return Promise.resolve();
   var prev=progress[id]||{},ns=status||prev.status||"todo",nn=note==null?(prev.note||""):note;
   if(ns===(prev.status||"todo")&&nn===(prev.note||""))return Promise.resolve();
   return mark(db.doc("progress/"+id).set({status:ns,note:nn,byId:me.id||"",at:Date.now()})).then(function(){
@@ -377,6 +386,7 @@ function saveProgress(id,status,note){
   });
 }
 function openTask(id){
+  if(!isChef)return;
   editId=id;var t=id==="new"?null:plan.filter(function(x){return x.id===id})[0];
   $("taskDlgTitle").textContent=t?"Modifier la tâche":"Ajouter une tâche";
   var s0=TODAY<START?START:(TODAY>END?END:TODAY);
@@ -386,7 +396,7 @@ function openTask(id){
   $("dlgTask").showModal();
 }
 function saveTask(ev){
-  ev.preventDefault();var err=$("tkErr");err.hidden=true;
+  ev.preventDefault();if(!isChef)return;var err=$("tkErr");err.hidden=true;
   var title=$("tkTitle").value.trim(),s=$("tkStart").value,e=$("tkEnd").value;
   if(!title||!s||!e){err.textContent="Intitulé et dates sont obligatoires.";err.hidden=false;return}
   if(e<s){err.textContent="La fin ne peut pas précéder le début.";err.hidden=false;return}
@@ -397,19 +407,21 @@ function saveTask(ev){
   mark(ref.set(data)).then(function(){$("dlgTask").close();if(isNew)sel=ref.id;return addLog((isNew?"a ajouté la tâche « ":"a modifié la tâche « ")+title+" » ("+fmt(s)+" → "+fmt(e)+")")}).catch(function(){});
 }
 function deleteTask(){
+  if(!isChef)return;
   var b=$("tkDelete");if(b.dataset.arm!=="1"){b.dataset.arm="1";b.textContent="Confirmer la suppression";return}
   var t=plan.filter(function(x){return x.id===editId})[0];if(!t)return;
   mark(db.doc("plan/"+editId).delete()).then(function(){$("dlgTask").close();if(sel===editId)sel=null;return addLog("a supprimé la tâche « "+t.title+" »")}).catch(function(){});
 }
 
 function submitRequest(ev){
-  ev.preventDefault();if(!db)return;
+  ev.preventDefault();if(!db||!canWrite)return;
   var who=$("rqWho").value.trim(),title=$("rqTitle").value.trim();if(!who||!title)return;
   var r={who:who,title:title,why:$("rqWhy").value.trim(),needBy:$("rqDate").value||"",hours:$("rqHours").value?+$("rqHours").value:0,byId:me.id||"",at:Date.now()};
   $("rqSend").disabled=true;
   mark(db.collection("requests").add(r)).then(function(){$("rqForm").reset();$("rqMsg").textContent="Demande envoyée. Elle attend la décision du Chef de Programme.";return addLog("a soumis la demande « "+title+" » (de "+who+")")}).catch(function(){}).then(function(){$("rqSend").disabled=false});
 }
 function openDecide(id){
+  if(!isChef)return;
   var r=requests.filter(function(x){return x.id===id})[0];if(!r)return;decReq=r;
   var d=decisions[id];decChoice=d?d.status:"accepted";
   $("decSummary").innerHTML='<b>'+esc(r.title)+'</b><br>De '+esc(r.who)+(r.why?' · '+esc(r.why):'');
@@ -423,7 +435,7 @@ function syncDecide(){
   $("dcNoteReq").textContent=decChoice==="accepted"?"(facultatif)":"(obligatoire)";
 }
 function saveDecision(ev){
-  ev.preventDefault();var err=$("dcErr");err.hidden=true;var r=decReq;if(!r)return;
+  ev.preventDefault();if(!isChef)return;var err=$("dcErr");err.hidden=true;var r=decReq;if(!r)return;
   var note=$("dcNote").value.trim();
   if(decChoice!=="accepted"&&!note){err.textContent="Écrivez un message pour le demandeur.";err.hidden=false;return}
   var dec={status:decChoice,note:note,byId:me.id||"",at:Date.now()},p=Promise.resolve(),prev=decisions[r.id];
@@ -472,12 +484,16 @@ window.addEventListener("hashchange",function(){var h=location.hash.slice(1);if(
 
 /* ---------- données partagées ---------- */
 function loadNames(){
-  if(!user)return;var ids={};
-  Object.keys(progress).forEach(function(k){if(progress[k].byId)ids[progress[k].byId]=1});
-  logs.forEach(function(l){if(l.uid)ids[l.uid]=1});
-  Object.keys(decisions).forEach(function(k){if(decisions[k].byId)ids[decisions[k].byId]=1});
-  var need=Object.keys(ids).filter(function(i){return !(i in names)});if(!need.length)return;
-  user.profiles(need).then(function(ps){need.forEach(function(i){names[i]=(ps[i]&&ps[i].name)||""});schedule()});
+  // Aucun profil privé n'est exposé aux visiteurs publics.
+}
+var privateListeners=[];
+function stopPrivate(){privateListeners.forEach(function(stop){stop()});privateListeners=[];requests=[];decisions={};logs=[];schedule()}
+function startPrivate(){
+  stopPrivate();
+  if(!me.id)return;
+  privateListeners.push(db.collection("requests").onSnapshot(function(s){requests=s.docs.map(function(d){var x=d.data();x.id=d.id;return x});schedule()},showErr));
+  privateListeners.push(db.collection("decisions").onSnapshot(function(s){decisions={};s.docs.forEach(function(d){decisions[d.id]=d.data()});schedule()},showErr));
+  privateListeners.push(db.collection("log").orderBy("at","desc").limit(100).onSnapshot(function(s){logs=s.docs.map(function(d){return d.data()});schedule()},showErr));
 }
 function start(){
   var timer=setTimeout(function(){$("loadNote").hidden=false},10000),got=0;
@@ -485,28 +501,23 @@ function start(){
   function ok(s){first()}
   db.collection("plan").onSnapshot(function(s){plan=s.docs.map(function(d){var x=d.data();x.id=d.id;return x});ok();schedule()},showErr);
   db.collection("progress").onSnapshot(function(s){progress={};s.docs.forEach(function(d){progress[d.id]=d.data()});ok();loadNames();schedule()},showErr);
-  db.collection("requests").onSnapshot(function(s){requests=s.docs.map(function(d){var x=d.data();x.id=d.id;return x});ok();schedule()},showErr);
-  db.collection("decisions").onSnapshot(function(s){decisions={};s.docs.forEach(function(d){decisions[d.id]=d.data()});ok();loadNames();schedule()},showErr);
-  db.collection("log").orderBy("at","desc").limit(100).onSnapshot(function(s){logs=s.docs.map(function(d){return d.data()});ok();loadNames();schedule()},showErr);
 }
 renderAll();
-(async function(){
-  try{
-    var chefLink=location.search.indexOf("chef=1")>-1;
-    if(!window.claude||!claude.use){
-      if(chefLink){var rc0=$("roleChip");rc0.className="chip role";rc0.textContent="Chef de Programme";$("addTask").hidden=false}
-      else $("roleChip").textContent="Lecture seule";
-      return}
-    user=await claude.use("user");db=await claude.use("db");
-    if(user){me=await user.me();isChef=(await user.canEdit())||chefLink;var cw=await user.can("data.write");canWrite=(cw!==false)||isChef}
-    var rc=$("roleChip");rc.className="chip role";rc.textContent=isChef?"Chef de Programme":"Participant";
-    if(me.name){var n=document.createElement("span");n.className="chip";n.textContent=me.name;$("who").appendChild(n)}
-    if(!db){$("errBox").hidden=false;$("errBox").textContent="Les données partagées ne sont pas disponibles dans cette vue. Ouvrez la page depuis son lien dans Claude.";return}
-    if(!canWrite){var ro=document.createElement("span");ro.className="chip";ro.textContent="Lecture seule";$("who").appendChild(ro)}
-    $("addTask").hidden=!isChef;
-    start();schedule();
-  }catch(e){showErr(e)}
-})();
+$("loginBtn").addEventListener("click",function(){auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(function(e){showErr(e)})});
+$("logoutBtn").addEventListener("click",function(){auth.signOut().catch(showErr)});
+auth.onAuthStateChanged(function(account){
+  me=account?{id:account.uid,name:account.displayName||account.email||""}:{id:null,name:""};
+  isChef=!!(account&&account.emailVerified&&account.email&&account.email.toLowerCase()===OWNER_EMAIL);
+  canWrite=!!account;
+  $("roleChip").textContent=isChef?"Chef de Programme":account?"Participant connecté":"Lecture publique";
+  $("roleChip").className="chip"+(isChef?" role":"");
+  $("loginBtn").hidden=!!account;$("logoutBtn").hidden=!account;
+  $("addTask").hidden=!isChef;
+  $("rqSend").disabled=!canWrite;
+  $("rqMsg").textContent=canWrite?"":"Connectez-vous avec Google pour faire une demande.";
+  startPrivate();detailKey="";schedule();
+},showErr);
+start();
 })();
 </script>
 
